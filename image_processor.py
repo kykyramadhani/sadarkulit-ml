@@ -32,7 +32,7 @@ def preprocess_image(image_bytes):
         image = image.resize((TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT))
         logger.info(f"Gambar diubah ukurannya ke: ({TARGET_IMAGE_WIDTH}, {TARGET_IMAGE_HEIGHT})")
 
-        image_array = np.array(image)
+        image_array = np.array(image, dtype=np.float32)
         
         # Tambahkan dimensi batch SEBELUM memanggil preprocess_input
         # karena fungsi ini mengharapkan batch gambar sebagai input

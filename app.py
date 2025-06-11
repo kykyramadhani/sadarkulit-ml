@@ -1,5 +1,5 @@
 # File: app.py
-# Versi final yang siap untuk di-deploy ke Vercel
+# Versi final yang diupdate untuk menggunakan TensorFlow Lite Interpreter
 
 import os
 import sys
@@ -8,12 +8,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import numpy as np
 
-# --- Penyesuaian Path untuk Vercel ---
+# --- Penyesuaian Path untuk Vercel (PENTING) ---
 # Menambahkan direktori root proyek ke path agar bisa mengimpor modul helper
-# Ini penting agar 'import model_loader' berfungsi saat di-deploy
 current_dir = os.path.dirname(__file__)
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
+# Perbaikan: Arahkan ke folder induk (root proyek), bukan folder saat ini
+root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
 # ------------------------------------
 
 # Impor modul helper Anda
@@ -28,27 +29,24 @@ CORS(app) # Mengizinkan Cross-Origin Resource Sharing
 logging.basicConfig(level=logging.INFO)
 
 # --- Pemuatan Model (Hanya Sekali saat Cold Start) ---
-# Memuat model dan label saat serverless function pertama kali dijalankan.
-# Ini jauh lebih efisien.
 try:
-    logging.info("Memulai pemuatan model dan label...")
+    logging.info("Memulai pemuatan model dan label TFLite...")
     model_loader.load_model_and_labels()
-    logging.info("Model dan label berhasil dimuat.")
+    logging.info("Interpreter TFLite dan label berhasil dimuat.")
 except Exception as e:
     logging.error(f"!!! GAGAL MEMUAT MODEL SAAT INISIALISASI: {e}", exc_info=True)
-# ----------------------------------------------------
 
 
 # --- Endpoint Prediksi Utama ---
-# Vercel akan mengarahkan semua request ke file ini
 @app.route("/", methods=['GET', 'POST'])
 def handle_predict():
-    # Menangani GET request (misalnya untuk health check)
+    # Menangani GET request untuk health check
     if request.method == 'GET':
-        status_model = "Siap" if model_loader.model is not None else "Gagal Dimuat"
+        # Diubah: Sekarang kita cek 'interpreter' bukan 'model'
+        status_model = "Siap" if model_loader.interpreter is not None else "Gagal Dimuat"
         return jsonify({
             "status": "online",
-            "message": "Selamat datang di SadarKulit ML API",
+            "message": "Selamat datang di SadarKulit ML API (TFLite)",
             "model_status": status_model
         })
 
@@ -56,7 +54,8 @@ def handle_predict():
     if request.method == 'POST':
         logging.info("Menerima request POST untuk prediksi.")
 
-        if model_loader.model is None:
+        # Diubah: Cek 'interpreter'
+        if model_loader.interpreter is None:
             logging.error("Prediksi gagal karena model tidak dimuat.")
             return jsonify({'error': 'Model tidak tersedia, periksa log server.'}), 503
 
@@ -71,19 +70,23 @@ def handle_predict():
 
         try:
             image_bytes = file.read()
-            
-            # 1. Pra-pemrosesan Gambar
             processed_image = image_processor.preprocess_image(image_bytes)
             
-            # 2. Lakukan Prediksi
-            predictions = model_loader.model.predict(processed_image)
+            # --- BAGIAN PREDIKSI DIUBAH TOTAL UNTUK TFLITE ---
+            # 1. Atur tensor input ke interpreter
+            model_loader.interpreter.set_tensor(model_loader.input_details[0]['index'], processed_image)
             
-            # 3. Proses Hasil Prediksi
+            # 2. Jalankan inferensi/prediksi
+            model_loader.interpreter.invoke()
+            
+            # 3. Dapatkan hasil dari tensor output
+            predictions = model_loader.interpreter.get_tensor(model_loader.output_details[0]['index'])
+            # --------------------------------------------------
+            
+            # Proses hasil prediksi (logika ini tetap sama)
             probabilities = predictions[0]
-            predicted_index = int(np.argmax(probabilities)) # konversi ke int standar python
-            confidence_score = float(np.max(probabilities)) # konversi ke float standar python
-
-            # Ambil nama penyakit dari label yang sudah dimuat
+            predicted_index = int(np.argmax(probabilities))
+            confidence_score = float(np.max(probabilities))
             disease_name = model_loader.class_labels.get(str(predicted_index), f"Kelas {predicted_index} (Tidak Dikenal)")
             
             response_data = {
