@@ -1,0 +1,9 @@
+D:\ML Dicoding\Capstone\proyek_flask_kulit\  <- Ini adalah ROOT PROYEK Anda
+├── env\                                # Folder lingkungan virtual Anda (dibuat oleh 'python -m venv env')
+├── app.py                              # File utama aplikasi Flask Anda
+├── image_processor.py                  # Modul untuk fungsi pra-pemrosesan gambar
+├── model_loader.py                     # Modul untuk memuat model & label kelas
+├── models_ml/                          # Folder khusus untuk menyimpan model dan file label
+│   ├── nama_model_anda.h5            # <-- File .h5 Anda diletakkan DI DALAM folder models_ml/
+│   └── class_labels.json             # <-- File label JSON Anda diletakkan DI DALAM folder models_ml/
+└── requirements.txt   
